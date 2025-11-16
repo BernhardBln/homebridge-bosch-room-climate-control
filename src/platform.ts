@@ -570,8 +570,8 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
       return;
     }
 
-    // BoschUserDefinedState
     await this.handleLongPollingResult(result);
+
     this.poll();
   }
 
