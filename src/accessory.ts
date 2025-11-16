@@ -490,6 +490,7 @@ export class BoschRoomClimateControlAccessory {
       info: logger('info'),
       warn: logger('warn'),
       log: logger('log'),
+      success: logger('success'),
       error: logger('error'),
       prefix: `${this.platform.log.prefix} ${prefix}`,
     };
