@@ -10,3 +10,4 @@ export * from './BoschServiceId';
 export * from './BoschState';
 export * from './BoschStatus';
 export * from './BoschTemperatureLevelState';
+export * from './BoschUserDefinedState';

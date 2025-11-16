@@ -1,5 +1,5 @@
-import { lastValueFrom, concatMap, switchMap, from, filter, map, toArray } from 'rxjs';
-import { BoschSmartHomeBridge, BshbResponse } from 'bosch-smart-home-bridge';
+import {lastValueFrom, concatMap, switchMap, from, filter, map, toArray} from 'rxjs';
+import {BoschSmartHomeBridge, BshbResponse} from 'bosch-smart-home-bridge';
 import {
   BoschClimateControlState,
   BoschDevice,
@@ -7,6 +7,7 @@ import {
   BoschOperationMode,
   BoschRoom,
   BoschRoomControlMode,
+  BoschUserDefinedState,
   BoschServiceId,
 } from './types';
 
@@ -56,7 +57,7 @@ export class BshcApi {
     );
   }
 
-  getDevices() {
+  getRoomClimateDevices() {
     return lastValueFrom(
       this.bshb
         .getBshcClient()
@@ -69,11 +70,45 @@ export class BshcApi {
             const deviceServiceIds = Object.values(device.deviceServiceIds);
 
             return deviceServiceIds?.includes(BoschServiceId.RoomClimateControl)
-            && deviceServiceIds?.includes(BoschServiceId.TemperatureLevel);
+              && deviceServiceIds?.includes(BoschServiceId.TemperatureLevel);
           }),
           toArray(),
         ),
     );
+  }
+
+  getUserDefinedStates() {
+    return lastValueFrom(this.bshb
+      .getBshcClient()
+      .getUserDefinedStates()
+      .pipe(
+        concatMap((response: BshbResponse<BoschUserDefinedState[]>) => {
+          const devices = response.parsedResponse;
+          return from(devices);
+        }),
+        toArray(),
+      ));
+  }
+
+  getUserDefinedState(deviceId: string) {
+    return lastValueFrom(
+      this.bshb
+        .getBshcClient()
+        .getUserDefinedStates(deviceId)
+        .pipe(
+          concatMap((response: BshbResponse<BoschUserDefinedState[]>) => {
+            const devices = response.parsedResponse;
+            return from(devices);
+          }),
+          toArray(),
+        ),
+    );
+  }
+
+  async setUserDefinedState(deviceId: string, targetState: boolean) {
+    return lastValueFrom(
+      this.bshb.getBshcClient()
+        .setUserDefinedState(deviceId, targetState));
   }
 
   getServiceData(deviceId: string) {
@@ -202,4 +237,5 @@ export class BshcApi {
       );
     });
   }
+
 }

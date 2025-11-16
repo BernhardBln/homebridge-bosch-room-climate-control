@@ -12,5 +12,6 @@ export enum BoschServiceId {
     // TemperatureOffset='TemperatureOffset',
     // ThermostatSupportedControlMode = 'ThermostatSupportedControlMode',
     // TemperatureLevelConfiguration = 'TemperatureLevelConfiguration',
-    RoomClimateControl = 'RoomClimateControl'
+    RoomClimateControl = 'RoomClimateControl',
+    UserDefinedState = 'userDefinedState',
 }

@@ -21,9 +21,10 @@ import {
   BoschDevice,
   BoschRoom,
   AccessoryContext,
-  BoschDeviceServiceData,
+  BoschDeviceServiceData, BoschUserDefinedState,
 } from './types';
 import { BshcApi } from './bshcApi';
+import {BoschUserDefinedStateSwitch} from "./stateSwitch";
 
 export type ConfigSchema = {
   host: string;
@@ -49,6 +50,8 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
 
   private readonly controllers: BoschRoomClimateControlAccessory[] = [];
   private readonly accessories: PlatformAccessory<AccessoryContext>[] = [];
+  private readonly switches: BoschUserDefinedStateSwitch[] = [];
+  private readonly userDefinedStates: PlatformAccessory<BoschUserDefinedState>[] = [];
 
   private longPollingId: string | null = null;
 
@@ -78,6 +81,7 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
 
       await this.initializeBoschSmartHomeBridge();
       await this.initializeRoomClimate();
+      await this.initializeUserDefinedStates();
       await this.syncAccessories();
 
       this.log.info('Starting long polling...');
@@ -97,8 +101,12 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
     });
   }
 
-  configureAccessory(accessory: PlatformAccessory<AccessoryContext>): void {
-    this.accessories.push(accessory);
+  configureAccessory(accessory: PlatformAccessory<AccessoryContext | BoschUserDefinedState>): void {
+    if('device' in accessory.context){
+      this.accessories.push(accessory as PlatformAccessory<AccessoryContext>);
+    }else if ('@type' in accessory.context && accessory.context['@type'] === 'userDefinedState'){
+      this.userDefinedStates.push(accessory as PlatformAccessory<BoschUserDefinedState>);
+    }
   }
 
   private async initializeBoschSmartHomeBridge() {
@@ -211,14 +219,24 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
   private async initializeRoomClimate(): Promise<void> {
     this.log.info('Initializing room climate devices...');
 
-    const devices = await this.bshcApi.getDevices();
+    const devices = await this.bshcApi.getRoomClimateDevices();
 
     for (const device of devices) {
-      await this.createAccessory(device);
+      await this.createRoomClimateAccessory(device);
     }
   }
 
-  private async createAccessory(device: BoschDevice): Promise<void> {
+  private async initializeUserDefinedStates(): Promise<void> {
+    this.log.info('Initializing user defined states...');
+
+    const userDefinedStates = await this.bshcApi.getUserDefinedStates();
+
+    for (const userDefinedState of userDefinedStates) {
+      await this.createUserDefinedStateSwitch(userDefinedState);
+    }
+  }
+
+  private async createRoomClimateAccessory(device: BoschDevice): Promise<void> {
     this.log.info(`Creating accessory for device ID ${device.id}...`);
 
     const uuid = this.api.hap.uuid.generate(device.serial);
@@ -264,8 +282,51 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
     this.controllers.push(controller);
   }
 
+  private async createUserDefinedStateSwitch(userDefinedState: BoschUserDefinedState): Promise<void> {
+    this.log.info(`Creating Switch for user defined state ${userDefinedState.name}...`);
+
+    const uuid = this.api.hap.uuid.generate(userDefinedState.id);
+    const existingSwitch = this.userDefinedStates.find(virtualSwitch => virtualSwitch.UUID === uuid);
+
+    if (existingSwitch) {
+      this.log.info(`Restoring switch for user defined state ${existingSwitch.displayName} from cache...`);
+
+      existingSwitch.context = userDefinedState;
+      // todo: check if fine for now to omit room
+      existingSwitch.displayName = this.getSwitchDisplayName(userDefinedState.name);
+
+      this.api.updatePlatformAccessories([existingSwitch]);
+
+      const userDefinedStateSwitch = new BoschUserDefinedStateSwitch(this, existingSwitch);
+      this.switches.push(userDefinedStateSwitch);
+
+      return;
+    }
+
+    this.log.info(`Adding new switch for user defined state ${userDefinedState.name}...`);
+
+    const accessory = new this.api.platformAccessory<BoschUserDefinedState>(
+      this.getSwitchDisplayName(userDefinedState.name),
+      uuid,
+      Categories.SWITCH,
+    );
+
+    accessory.context = userDefinedState;
+    // todo: ok to omit room?
+    // accessory.context.room = room;
+
+    this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+
+    const userDefinedStateSwitch = new BoschUserDefinedStateSwitch(this, accessory);
+    this.switches.push(userDefinedStateSwitch);
+  }
+
   private getAccessoryDisplayName(roomName: string, deviceName: string): string {
     return `${roomName} ${deviceName?.replace(/[^a-z0-9]/gi, '') ?? 'Room Climate Control'}`;
+  }
+
+  private getSwitchDisplayName(deviceName: string): string {
+    return `${deviceName?.replace(/[^a-z0-9]/gi, '') ?? 'State'}`;
   }
 
   private async updateAccessory(accessory: PlatformAccessory): Promise<void> {
@@ -303,7 +364,7 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
 
     const devices = await this.queue.add(async () => {
       try {
-        return this.bshcApi.getDevices();
+        return this.bshcApi.getRoomClimateDevices();
       } catch(e) {
         this.log.error('Error fetiching devices', (e as BshbError).message);
         return null;
@@ -333,7 +394,7 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
       const controller = this.controllers.find(controller => controller.getDeviceContext().id === device.id);
 
       if (controller == null) {
-        await this.createAccessory(device);
+        await this.createRoomClimateAccessory(device);
       }
     }
   }
