@@ -1,4 +1,4 @@
-import {BoschServiceId} from "./BoschServiceId";
+import {BoschServiceId} from './BoschServiceId';
 
 export type BoschUserDefinedState = {
     '@type': BoschServiceId.UserDefinedState;
@@ -9,7 +9,7 @@ export type BoschUserDefinedState = {
 
 export function isUserDefinedState(deviceServiceData: any)
   : deviceServiceData is BoschUserDefinedState {
-    if (deviceServiceData["@type"] === BoschServiceId.UserDefinedState) {
+    if (deviceServiceData['@type'] === BoschServiceId.UserDefinedState) {
         return true;
     }
 

@@ -23,11 +23,12 @@ import {
   BoschDeviceServiceData,
   BoschRoom,
   BoschServiceId,
-  BoschUserDefinedState, isBoschDeviceServiceData, isUserDefinedState,
+  BoschUserDefinedState,
+  isBoschDeviceServiceData,
 } from './types';
 import {BshcApi} from './bshcApi';
-import {BoschUserDefinedStateSwitch} from "./stateSwitch";
-import {isUserDefinedStateLongPollingResult} from "./types/BoschUserDefinedStateLongPollingResult";
+import {BoschUserDefinedStateSwitch} from './stateSwitch';
+import {isUserDefinedStateLongPollingResult} from './types/BoschUserDefinedStateLongPollingResult';
 
 export type ConfigSchema = {
   host: string;
@@ -116,7 +117,7 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
     } else if ('@type' in accessory.context && accessory.context['@type'] === BoschServiceId.UserDefinedState) {
       this.userDefinedStates.push(accessory as PlatformAccessory<BoschUserDefinedState>);
     } else {
-      this.log.warn("Restoring unknown accessory!", accessory);
+      this.log.warn('Restoring unknown accessory!', accessory);
     }
   }
 
@@ -163,7 +164,7 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
   private updateConfig(config: {
     certificate: { cert: string; private: string };
     clientId: string;
-    clientName: string
+    clientName: string;
   }): void {
     this.log.info('Loading platform config...');
 
@@ -592,7 +593,7 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
       } else if (isUserDefinedStateLongPollingResult(longPollingResult)) {
 
         if (longPollingResult.deleted) {
-          this.log.debug(`Removing deleted user defined state switch ${longPollingResult.name || longPollingResult.id}.`)
+          this.log.debug(`Removing deleted user defined state switch ${longPollingResult.name || longPollingResult.id}.`);
 
           const userDefinedState = this.userDefinedStates.find(userDefinedState => {
             return userDefinedState.context.id === longPollingResult.id;

@@ -14,7 +14,7 @@ export type BoschDeviceServiceData<T extends BoschState = BoschState> = {
 
 export function isBoschDeviceServiceData(deviceServiceData: any)
   : deviceServiceData is BoschDeviceServiceData {
-  if (deviceServiceData["@type"] === 'DeviceServiceData') {
+  if (deviceServiceData['@type'] === 'DeviceServiceData') {
     return true;
   }
 

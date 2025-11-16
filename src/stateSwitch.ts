@@ -10,8 +10,8 @@ import {
   isUserDefinedState,
 } from './types';
 import {
-  BoschUserDefinedStateLongPollingResult
-} from "./types/BoschUserDefinedStateLongPollingResult";
+  BoschUserDefinedStateLongPollingResult,
+} from './types/BoschUserDefinedStateLongPollingResult';
 
 const ON: boolean = true;
 const OFF: boolean = false;
@@ -76,9 +76,9 @@ export class BoschUserDefinedStateSwitch {
     );
   }
 
-  public onBoschEvent(longPollingResult : BoschUserDefinedStateLongPollingResult): void {
+  public onBoschEvent(longPollingResult: BoschUserDefinedStateLongPollingResult): void {
     try {
-       if (isUserDefinedState(longPollingResult)) {
+      if (isUserDefinedState(longPollingResult)) {
         this.updateLocalState(longPollingResult);
         this.updateCharacteristics(this.getLocalState());
       }
@@ -109,7 +109,7 @@ export class BoschUserDefinedStateSwitch {
       const deviceId = this.platformAccessory.context.id;
 
       try {
-        const data = (await this.platform.bshcApi.getUserDefinedState(deviceId, this.platform))
+        const data = (await this.platform.bshcApi.getUserDefinedState(deviceId, this.platform));
         this.updateLocalState(data);
 
       } catch (e) {

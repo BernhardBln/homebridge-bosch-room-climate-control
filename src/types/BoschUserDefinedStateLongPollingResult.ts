@@ -1,4 +1,4 @@
-import {BoschServiceId} from "./BoschServiceId";
+import {BoschServiceId} from './BoschServiceId';
 
 export type BoschUserDefinedStateLongPollingResult =  {
   '@type': BoschServiceId.UserDefinedState;
@@ -11,7 +11,7 @@ export type BoschUserDefinedStateLongPollingResult =  {
 
 export function isUserDefinedStateLongPollingResult(longPollingResult: any)
   : longPollingResult is BoschUserDefinedStateLongPollingResult {
-  if (longPollingResult["@type"] === BoschServiceId.UserDefinedState
+  if (longPollingResult['@type'] === BoschServiceId.UserDefinedState
     && 'deleted' in longPollingResult) {
     return true;
   }
