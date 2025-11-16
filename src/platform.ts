@@ -10,21 +10,24 @@ import {
   PlatformConfig,
   Service,
 } from 'homebridge';
-import { BoschSmartHomeBridgeBuilder, BshbError, BshbUtils } from 'bosch-smart-home-bridge';
+import {BoschSmartHomeBridgeBuilder, BshbError, BshbUtils} from 'bosch-smart-home-bridge';
 import PQueue from 'p-queue';
 
-import { PLATFORM_NAME, PLUGIN_NAME } from './settings';
-import { BoschRoomClimateControlAccessory } from './accessory';
-import { pretty } from './utils';
+import {PLATFORM_NAME, PLUGIN_NAME} from './settings';
+import {BoschRoomClimateControlAccessory} from './accessory';
+import {pretty} from './utils';
 
 import {
-  BoschDevice,
-  BoschRoom,
   AccessoryContext,
-  BoschDeviceServiceData, BoschUserDefinedState,
+  BoschDevice,
+  BoschDeviceServiceData,
+  BoschRoom,
+  BoschServiceId,
+  BoschUserDefinedState, isBoschDeviceServiceData, isUserDefinedState,
 } from './types';
-import { BshcApi } from './bshcApi';
+import {BshcApi} from './bshcApi';
 import {BoschUserDefinedStateSwitch} from "./stateSwitch";
+import {isUserDefinedStateLongPollingResult} from "./types/BoschUserDefinedStateLongPollingResult";
 
 export type ConfigSchema = {
   host: string;
@@ -50,6 +53,7 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
 
   private readonly controllers: BoschRoomClimateControlAccessory[] = [];
   private readonly accessories: PlatformAccessory<AccessoryContext>[] = [];
+  // user-defined states from Bosch, mirrored as switches in Homekit
   private readonly switches: BoschUserDefinedStateSwitch[] = [];
   private readonly userDefinedStates: PlatformAccessory<BoschUserDefinedState>[] = [];
 
@@ -82,7 +86,9 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
       await this.initializeBoschSmartHomeBridge();
       await this.initializeRoomClimate();
       await this.initializeUserDefinedStates();
+
       await this.syncAccessories();
+      await this.syncStates();
 
       this.log.info('Starting long polling...');
       this.startLongPolling();
@@ -98,14 +104,19 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
       this.controllers.forEach(accessory => {
         accessory.dispose();
       });
+      this.switches.forEach(switchAcc => {
+        switchAcc.dispose();
+      });
     });
   }
 
   configureAccessory(accessory: PlatformAccessory<AccessoryContext | BoschUserDefinedState>): void {
-    if('device' in accessory.context){
+    if ('device' in accessory.context) {
       this.accessories.push(accessory as PlatformAccessory<AccessoryContext>);
-    }else if ('@type' in accessory.context && accessory.context['@type'] === 'userDefinedState'){
+    } else if ('@type' in accessory.context && accessory.context['@type'] === BoschServiceId.UserDefinedState) {
       this.userDefinedStates.push(accessory as PlatformAccessory<BoschUserDefinedState>);
+    } else {
+      this.log.warn("Restoring unknown accessory!", accessory);
     }
   }
 
@@ -123,7 +134,8 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
       .withClientPrivateKey(certificate.private)
       .withLogger({
         fine: this.config.disableVerboseLogs ?
-          () => {} :
+          () => {
+          } :
           this.log.debug.bind(this.log),
         debug: this.log.debug.bind(this.log),
         info: this.log.info.bind(this.log),
@@ -148,7 +160,11 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
     await this.bshcApi.pair(clientName, clientId, this.config.systemPassword);
   }
 
-  private updateConfig(config: {certificate: {cert: string; private: string}; clientId: string; clientName: string}): void {
+  private updateConfig(config: {
+    certificate: { cert: string; private: string };
+    clientId: string;
+    clientName: string
+  }): void {
     this.log.info('Loading platform config...');
 
     const configPath = this.api.user.configPath();
@@ -156,7 +172,7 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
     let configString: string;
     try {
       configString = fs.readFileSync(configPath, 'utf8');
-    } catch(e) {
+    } catch (e) {
       this.log.warn(`Could not load config file ${configPath}`);
       return;
     }
@@ -211,7 +227,7 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
 
     try {
       fs.writeFileSync(configPath, JSON.stringify(configJson, null, 2));
-    } catch(e) {
+    } catch (e) {
       this.log.warn(`Could not update config file ${configPath}`, e);
     }
   }
@@ -245,7 +261,7 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
     let room: BoschRoom;
     try {
       room = await this.bshcApi.getRoom(device.roomId);
-    } catch(e) {
+    } catch (e) {
       this.log.warn(`Cannot add accessory for device ID ${device.id}, failed to fetch room`);
       return;
     }
@@ -275,11 +291,13 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
 
     accessory.context.device = device;
     accessory.context.room = room;
+    accessory.displayName = this.getAccessoryDisplayName(room.name, device.name);
 
     this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
 
     const controller = new BoschRoomClimateControlAccessory(this, accessory);
     this.controllers.push(controller);
+    this.accessories.push(accessory);
   }
 
   private async createUserDefinedStateSwitch(userDefinedState: BoschUserDefinedState): Promise<void> {
@@ -289,10 +307,10 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
     const existingSwitch = this.userDefinedStates.find(virtualSwitch => virtualSwitch.UUID === uuid);
 
     if (existingSwitch) {
-      this.log.info(`Restoring switch for user defined state ${existingSwitch.displayName} from cache...`);
+      this.log.debug(`Restoring switch for user defined state ${existingSwitch.displayName} from cache...`);
 
       existingSwitch.context = userDefinedState;
-      // todo: check if fine for now to omit room
+      // omitting room, as we do not have one in the bosch controller for a state
       existingSwitch.displayName = this.getSwitchDisplayName(userDefinedState.name);
 
       this.api.updatePlatformAccessories([existingSwitch]);
@@ -305,20 +323,21 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
 
     this.log.info(`Adding new switch for user defined state ${userDefinedState.name}...`);
 
-    const accessory = new this.api.platformAccessory<BoschUserDefinedState>(
+    const userDefinedStateSwitchAcc = new this.api.platformAccessory<BoschUserDefinedState>(
       this.getSwitchDisplayName(userDefinedState.name),
       uuid,
       Categories.SWITCH,
     );
 
-    accessory.context = userDefinedState;
-    // todo: ok to omit room?
-    // accessory.context.room = room;
+    userDefinedStateSwitchAcc.context = userDefinedState;
+    userDefinedStateSwitchAcc.displayName = this.getSwitchDisplayName(userDefinedState.name);
 
-    this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
+    this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [userDefinedStateSwitchAcc]);
 
-    const userDefinedStateSwitch = new BoschUserDefinedStateSwitch(this, accessory);
+
+    const userDefinedStateSwitch = new BoschUserDefinedStateSwitch(this, userDefinedStateSwitchAcc);
     this.switches.push(userDefinedStateSwitch);
+    this.userDefinedStates.push(userDefinedStateSwitchAcc);
   }
 
   private getAccessoryDisplayName(roomName: string, deviceName: string): string {
@@ -359,13 +378,39 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
     this.accessories.splice(this.accessories.indexOf(accessory), 1);
   }
 
+  private async removeState(uuid: string): Promise<void> {
+    this.log.debug(`Attempting to remove state with UUID ${uuid}...`);
+
+    const userDefinedState = this.userDefinedStates.find(accessory => accessory.UUID === uuid);
+
+    if (userDefinedState == null) {
+      this.log.warn(`Could not find state UUID ${uuid} to remove`);
+      return;
+    }
+
+    const userDefinedStateSwitch = this.switches.find(userDefinedStateSwitch => {
+      return userDefinedState.context.id === userDefinedStateSwitch.platformAccessory.context.id;
+    });
+
+    if (userDefinedStateSwitch != null) {
+      userDefinedStateSwitch.setUnavailable();
+      userDefinedStateSwitch.dispose();
+      this.switches.splice(this.switches.indexOf(userDefinedStateSwitch), 1);
+    }
+
+    this.log.debug(`Removing state switch ${userDefinedState.displayName}...`);
+
+    this.api.unregisterPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [userDefinedState]);
+    this.userDefinedStates.splice(this.userDefinedStates.indexOf(userDefinedState), 1);
+  }
+
   private async syncAccessories(): Promise<void> {
     this.log.info('Syncing accessories...');
 
     const devices = await this.queue.add(async () => {
       try {
         return this.bshcApi.getRoomClimateDevices();
-      } catch(e) {
+      } catch (e) {
         this.log.error('Error fetiching devices', (e as BshbError).message);
         return null;
       }
@@ -399,11 +444,51 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
     }
   }
 
+  private async syncStates(): Promise<void> {
+    this.log.debug('Syncing user defined states...');
+
+    const userDefinedStates = await this.queue.add(async () => {
+      try {
+        return this.bshcApi.getUserDefinedStates();
+      } catch (e) {
+        this.log.error('Error fetching user defined states', (e as BshbError).message);
+        return null;
+      }
+    });
+
+    if (userDefinedStates == null) {
+      this.log.info('Could not sync user defined states, trying again next time');
+      return;
+    }
+
+    this.log.debug('Received user defined states to sync');
+    this.log.debug(pretty(userDefinedStates));
+
+    for (const userDefinedState of this.userDefinedStates) {
+      const device = userDefinedStates.find(device => device.id === userDefinedState.context.id);
+
+      if (device == null) {
+        await this.removeState(userDefinedState.UUID);
+      } else {
+        userDefinedState.context = device;
+        await this.updateAccessory(userDefinedState);
+      }
+    }
+
+    for (const userDefinedState of userDefinedStates) {
+      const controller = this.switches.find(stateSwitch => stateSwitch.platformAccessory.context.id === userDefinedState.id);
+
+      if (controller == null) {
+        await this.createUserDefinedStateSwitch(userDefinedState);
+      }
+    }
+  }
+
   private startPeriodicAccessorySync(): void {
     const minutes = this.config.accessorySyncFrequency ??
-    this.config.accessoryUpdateFrequency ??
-    this.config.accessoryUpdates ??
-    this.config.periodicUpdates;
+      this.config.accessoryUpdateFrequency ??
+      this.config.accessoryUpdates ??
+      this.config.periodicUpdates;
 
     if (minutes == null || minutes < 1) {
       this.log.info('Periodic accessory updates are disabled');
@@ -415,7 +500,8 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
 
       try {
         await this.syncAccessories();
-      } catch(e) {
+        await this.syncStates();
+      } catch (e) {
         this.log.warn(`Could not update accessories, retrying during next cycle in ${minutes} minutes`, e);
       }
 
@@ -435,7 +521,7 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
   private async startLongPolling(): Promise<void> {
     this.log.info('Attempting to start long polling...');
 
-    if(this.longPollingId != null) {
+    if (this.longPollingId != null) {
       this.log.info(`Long polling has already been started with ID ${this.longPollingId}`);
       return;
     }
@@ -476,28 +562,62 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
 
     try {
       result = await this.bshcApi.poll(this.longPollingId);
-    } catch(e) {
+    } catch (e) {
       this.log.error('Failed to open long polling connection', (e as BshbError).message);
       await this.stopLongPolling();
       await this.startLongPolling();
       return;
     }
 
-    this.handleLongPollingResult(result);
+    // BoschUserDefinedState
+    await this.handleLongPollingResult(result);
     this.poll();
   }
 
-  private handleLongPollingResult(deviceServiceDataResult: BoschDeviceServiceData[]): void {
+  private async handleLongPollingResult(longPollingResults: any[]): Promise<void> {
     this.log.debug('Handeling long polling result...');
-    this.log.debug(pretty(deviceServiceDataResult));
+    this.log.debug(pretty(longPollingResults));
 
-    for (const deviceServiceData of deviceServiceDataResult) {
-      const controller = this.controllers.find(controller => {
-        return controller.platformAccessory.context.device.id === deviceServiceData.deviceId;
-      });
+    for (const longPollingResult of longPollingResults) {
 
-      if (controller != null) {
-        controller.onBoschEvent(deviceServiceData);
+      if (isBoschDeviceServiceData(longPollingResult)) {
+        const controller = this.controllers.find(controller => {
+          return controller.platformAccessory.context.device.id === longPollingResult.deviceId;
+        });
+
+        if (controller != null) {
+          controller.onBoschEvent(longPollingResult);
+        }
+
+      } else if (isUserDefinedStateLongPollingResult(longPollingResult)) {
+
+        if (longPollingResult.deleted) {
+          this.log.debug(`Removing deleted user defined state switch ${longPollingResult.name || longPollingResult.id}.`)
+
+          const userDefinedState = this.userDefinedStates.find(userDefinedState => {
+            return userDefinedState.context.id === longPollingResult.id;
+          });
+
+          if (userDefinedState != null) {
+            await this.removeState(userDefinedState.UUID);
+          } else {
+            this.log.debug(`Already removed switch for state ${longPollingResult.id}`);
+          }
+
+        } else {
+          // create new switch, or update state of existing one
+
+          const stateSwitch = this.switches.find(stateSwitch => {
+            return stateSwitch.platformAccessory.context.id === longPollingResult.id;
+          });
+
+          if (stateSwitch == null) {
+            // create new switch
+            await this.createUserDefinedStateSwitch(longPollingResult as BoschUserDefinedState);
+          } else {
+            stateSwitch.onBoschEvent(longPollingResult);
+          }
+        }
       }
     }
   }

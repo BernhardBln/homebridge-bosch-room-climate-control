@@ -2,8 +2,6 @@ import { BoschClimateControlState } from './BoschClimateControlState';
 import { BoschServiceId } from './BoschServiceId';
 import { BoschState } from './BoschState';
 import { BoschTemperatureLevelState } from './BoschTemperatureLevelState';
-import {BoschUserDefinedState} from "./BoschUserDefinedState";
-import {BoschUserDefinedStateSwitch} from "../stateSwitch";
 
 export type BoschDeviceServiceData<T extends BoschState = BoschState> = {
     '@type': 'DeviceServiceData';
@@ -14,18 +12,18 @@ export type BoschDeviceServiceData<T extends BoschState = BoschState> = {
     path: string;
 };
 
-export function isRoomClimateControlService(deviceServiceData: BoschDeviceServiceData)
-  : deviceServiceData is BoschDeviceServiceData<BoschClimateControlState> {
-  if (deviceServiceData.id === BoschServiceId.RoomClimateControl) {
+export function isBoschDeviceServiceData(deviceServiceData: any)
+  : deviceServiceData is BoschDeviceServiceData {
+  if (deviceServiceData["@type"] === 'DeviceServiceData') {
     return true;
   }
 
   return false;
 }
 
-export function isUserDefinedState(deviceServiceData: BoschDeviceServiceData)
-  : deviceServiceData is BoschDeviceServiceData<BoschUserDefinedState> {
-  if (deviceServiceData.id === BoschServiceId.UserDefinedState) {
+export function isRoomClimateControlService(deviceServiceData: BoschDeviceServiceData)
+  : deviceServiceData is BoschDeviceServiceData<BoschClimateControlState> {
+  if (deviceServiceData.id === BoschServiceId.RoomClimateControl) {
     return true;
   }
 

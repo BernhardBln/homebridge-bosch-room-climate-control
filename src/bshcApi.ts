@@ -10,6 +10,7 @@ import {
   BoschUserDefinedState,
   BoschServiceId,
 } from './types';
+import {BoschRoomClimateControlPlatform} from "./platform";
 
 export class BshcApi {
 
@@ -90,18 +91,13 @@ export class BshcApi {
       ));
   }
 
-  getUserDefinedState(deviceId: string) {
+  getUserDefinedState(deviceId: string, platform: BoschRoomClimateControlPlatform) {
     return lastValueFrom(
       this.bshb
         .getBshcClient()
         .getUserDefinedStates(deviceId)
         .pipe(
-          concatMap((response: BshbResponse<BoschUserDefinedState[]>) => {
-            const devices = response.parsedResponse;
-            return from(devices);
-          }),
-          toArray(),
-        ),
+          map((response: BshbResponse<any>) => response.parsedResponse as BoschUserDefinedState))
     );
   }
 
@@ -237,5 +233,4 @@ export class BshcApi {
       );
     });
   }
-
 }

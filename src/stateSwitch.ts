@@ -6,11 +6,12 @@ import {BoschRoomClimateControlPlatform} from './platform';
 import {pretty} from './utils';
 
 import {
-  AccessoryContext,
-  BoschDeviceServiceData,
-  BoschDevice,
-  BoschUserDefinedState, isUserDefinedState,
+  BoschUserDefinedState,
+  isUserDefinedState,
 } from './types';
+import {
+  BoschUserDefinedStateLongPollingResult
+} from "./types/BoschUserDefinedStateLongPollingResult";
 
 const ON: boolean = true;
 const OFF: boolean = false;
@@ -75,10 +76,10 @@ export class BoschUserDefinedStateSwitch {
     );
   }
 
-  public onBoschEvent(deviceServiceData: BoschDeviceServiceData): void {
+  public onBoschEvent(longPollingResult : BoschUserDefinedStateLongPollingResult): void {
     try {
-      if (isUserDefinedState(deviceServiceData)) {
-        this.updateLocalState(deviceServiceData.state);
+       if (isUserDefinedState(longPollingResult)) {
+        this.updateLocalState(longPollingResult);
         this.updateCharacteristics(this.getLocalState());
       }
     } catch (e) {
@@ -108,12 +109,11 @@ export class BoschUserDefinedStateSwitch {
       const deviceId = this.platformAccessory.context.id;
 
       try {
-        (await this.platform.bshcApi.getUserDefinedState(deviceId))
-          .forEach(data => {
-            this.updateLocalState(data);
-          });
+        const data = (await this.platform.bshcApi.getUserDefinedState(deviceId, this.platform))
+        this.updateLocalState(data);
+
       } catch (e) {
-        this.log.warn('Could not fetch device state');
+        this.log.warn('Could not fetch device state', e);
         this.setUnavailable();
         return;
       }

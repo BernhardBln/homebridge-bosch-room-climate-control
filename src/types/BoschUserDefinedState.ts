@@ -6,3 +6,12 @@ export type BoschUserDefinedState = {
     name: string;
     state: boolean;
 };
+
+export function isUserDefinedState(deviceServiceData: any)
+  : deviceServiceData is BoschUserDefinedState {
+    if (deviceServiceData["@type"] === BoschServiceId.UserDefinedState) {
+        return true;
+    }
+
+    return false;
+}
