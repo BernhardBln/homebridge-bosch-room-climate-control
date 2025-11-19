@@ -292,7 +292,6 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
 
     accessory.context.device = device;
     accessory.context.room = room;
-    accessory.displayName = this.getAccessoryDisplayName(room.name, device.name);
 
     this.api.registerPlatformAccessories(PLUGIN_NAME, PLATFORM_NAME, [accessory]);
 
@@ -501,7 +500,6 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
 
       try {
         await this.syncAccessories();
-        await this.syncStates();
       } catch (e) {
         this.log.warn(`Could not update accessories, retrying during next cycle in ${minutes} minutes`, e);
       }

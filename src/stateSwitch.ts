@@ -26,7 +26,6 @@ export type AccessoryState = {
 };
 
 export class BoschUserDefinedStateSwitch {
-  private timeoutId!: NodeJS.Timeout;
 
   private state: AccessoryState = {
     available: true,
@@ -58,7 +57,6 @@ export class BoschUserDefinedStateSwitch {
 
   public dispose(): void {
     this.log.info('Disposing accessory...');
-    this.stopPeriodicStateSync();
   }
 
   public getLocalState(): AccessoryState {
@@ -92,9 +90,6 @@ export class BoschUserDefinedStateSwitch {
 
     await this.syncAccessory();
 
-    this.log.info('Starting periodic state updates...');
-    this.startPeriodicStateSync();
-
     this.log.info('Registering characteristic handlers...');
 
     this.service.getCharacteristic(this.platform.Characteristic.On)
@@ -109,7 +104,7 @@ export class BoschUserDefinedStateSwitch {
       const deviceId = this.platformAccessory.context.id;
 
       try {
-        const data = (await this.platform.bshcApi.getUserDefinedState(deviceId, this.platform));
+        const data = (await this.platform.bshcApi.getUserDefinedState(deviceId));
         this.updateLocalState(data);
 
       } catch (e) {
@@ -122,37 +117,6 @@ export class BoschUserDefinedStateSwitch {
     });
   }
 
-  private startPeriodicStateSync(): void {
-    const minutes = this.platform.config.stateSyncFrequency ??
-      this.platform.config.stateUpdateFrequency ??
-      this.platform.config.stateUpdates;
-
-    if (minutes == null || minutes < 1) {
-      this.log.info('Periodic updates are disabled');
-      return;
-    }
-
-    this.timeoutId = setTimeout(async () => {
-      this.log.debug('Running periodic state update...');
-
-      try {
-        await this.syncAccessory();
-      } catch (e) {
-        this.log.warn(`Could not update state during periodic update, retrying during next cycle in ${minutes} minutes`, e);
-      }
-
-      this.startPeriodicStateSync();
-    }, minutes * 60 * 1000);
-  }
-
-  private stopPeriodicStateSync(): void {
-    if (this.timeoutId == null) {
-      return;
-    }
-
-    this.log.info('Stopping periodic state updates...');
-    clearTimeout(this.timeoutId);
-  }
 
   private updateLocalState(deviceServiceData: BoschUserDefinedState): void {
     this.state.available = true;

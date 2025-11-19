@@ -91,14 +91,14 @@ export class BshcApi {
       ));
   }
 
-  getUserDefinedState(deviceId: string, platform: BoschRoomClimateControlPlatform) {
+  getUserDefinedState(deviceId: string) {
     return lastValueFrom(
       this.bshb
         .getBshcClient()
         .getUserDefinedStates(deviceId)
-        .pipe(
-          map((response: BshbResponse<any>) => response.parsedResponse as BoschUserDefinedState))
-    );
+        // had to cast it, as the client (in the current version) claims to return a list,
+        // but in fact it is a single item (which makes sense when querying for a device id)
+        .pipe(map((response: BshbResponse<any>) => response.parsedResponse as BoschUserDefinedState)));
   }
 
   async setUserDefinedState(deviceId: string, targetState: boolean) {
