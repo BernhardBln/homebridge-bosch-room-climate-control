@@ -35,7 +35,14 @@ See [`config.schema.json`](config.schema.json)
 - **Update measured temperature changes in realtime** through events from the BSHC
 - **Reflect operation mode or target temperature changes immediately** through events from the BSHC, also when set from outside (e.g., through the Bosch Smart Home app, or on a physical device)
 - **Add/remove new/unavilable room climate control devices automatically** in periodic check
-- **Set devices to unavailable** if state cannot be fetched in periodic syncs, or if the current temperature is not available 
+- **Set devices to unavailable** if state cannot be fetched in periodic syncs, or if the current temperature is not available
+- **User-defined states from the Bosch App**
+  - When enabled in the configuration, user-defined states from the Bosch App are exposed as switches in HomeKit.
+  - This unlocks a long-missing feature of the Bosch App: automations based on people arriving or leaving the house.
+  - For example, you can arm the alarm when the last person leaves or switch heating schedules.
+  - HomeKit provides flexible conditions, such as specific people or everyone arriving or leaving.
+  - Bosch App states can also be changed by automations triggered by events not available in HomeKit (e.g. alarms or water leaks) and then used to drive HomeKit automations.
+  - If you use first-generation climate controls or prefer Bosch’s official climate integration, you can disable climate control exposure in the configuration.
 
 **Note for scenes and automations**
 
