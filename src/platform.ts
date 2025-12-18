@@ -40,6 +40,8 @@ export type ConfigSchema = {
   clientCert: string;
   clientKey: string;
   disableVerboseLogs: boolean;
+  enableUserDefinedStates: boolean;
+  disableClimateControls: boolean;
 };
 
 export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
@@ -85,17 +87,30 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
       }
 
       await this.initializeBoschSmartHomeBridge();
-      await this.initializeRoomClimate();
-      await this.initializeUserDefinedStates();
 
-      await this.syncAccessories();
-      await this.syncStates();
+      if (!this.config.disableClimateControls) {
+        await this.initializeRoomClimate();
+        await this.syncAccessories();
+      } else {
+        await this.clearAccessories();
+      }
 
-      this.log.info('Starting long polling...');
-      this.startLongPolling();
+      if (this.config.enableUserDefinedStates) {
+        await this.initializeUserDefinedStates();
+        await this.syncStates();
+      } else {
+        await this.clearStates();
+      }
 
-      this.log.info('Starting periodic accessory updates...');
-      this.startPeriodicAccessorySync();
+      if (!this.config.disableClimateControls || this.config.enableUserDefinedStates) {
+        this.log.info('Starting long polling...');
+        this.startLongPolling();
+      }
+
+      if (!this.config.disableClimateControls) {
+        this.log.info('Starting periodic accessory updates...');
+        this.startPeriodicAccessorySync();
+      }
     });
 
     api.on(APIEvent.SHUTDOWN, () => {
@@ -424,7 +439,8 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
     this.log.debug('Recieved devices to sync');
     this.log.debug(pretty(devices));
 
-    for (const accessory of this.accessories) {
+    for (let i = this.accessories.length - 1; i >= 0; i--) {
+      const accessory = this.accessories[i];
       const device = devices.find(device => device.id === accessory.context.device.id);
 
       if (device == null) {
@@ -464,7 +480,8 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
     this.log.debug('Received user defined states to sync');
     this.log.debug(pretty(userDefinedStates));
 
-    for (const userDefinedState of this.userDefinedStates) {
+    for (let i = this.userDefinedStates.length - 1; i >= 0; i--) {
+      const userDefinedState = this.userDefinedStates[i];
       const device = userDefinedStates.find(device => device.id === userDefinedState.context.id);
 
       if (device == null) {
@@ -628,4 +645,29 @@ export class BoschRoomClimateControlPlatform implements DynamicPlatformPlugin {
 
     return true;
   }
+
+  private async clearAccessories() {
+    // we need to make sure that when climate controls were used before,
+    // but got disabled now, we remove them from homekit
+    if (this.accessories.length > 0) {
+      this.log.info('Removing accessories as climate controls got disabled...');
+
+      for (let i = this.accessories.length - 1; i >= 0; i--) {
+        const accessory = this.accessories[i];
+        await this.removeAccessory(accessory.UUID);
+      }
+    }
+  }
+
+  private async clearStates() {
+    if (this.userDefinedStates.length > 0) {
+      this.log.info('Removing user-defined state switches as states got disabled...');
+
+      for (let i = this.userDefinedStates.length - 1; i >= 0; i--) {
+        const userDefinedState = this.userDefinedStates[i];
+        await this.removeState(userDefinedState.UUID);
+      }
+    }
+  }
+
 }

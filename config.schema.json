@@ -61,6 +61,20 @@
                 "description": "Do not log the fine log level from the api client",
                 "type": "boolean",
                 "required": false
+            },
+            "enableUserDefinedStates": {
+                "title": "Enable user-defined states",
+                "description": "Exposes the user-defined states from the Bosch App as switches in Homekit",
+                "type": "boolean",
+                "required": false,
+                "default": false
+            },
+            "disableClimateControls": {
+                "title": "Disable climate controls",
+                "description": "If you use first-gen climate controls, and you want to rely on the default implementation by Bosch, and use this plugin solely for exposing the user-defined states.",
+                "type": "boolean",
+                "required": false,
+                "default": false
             }
         }
     },
